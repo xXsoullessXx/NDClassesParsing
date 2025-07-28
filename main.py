@@ -1,70 +1,41 @@
 import asyncio
-import os
-import schedule
-import time
-import telebot
-from telebot.async_telebot import AsyncTeleBot
 import sqlite3 as sql
+from telebot.async_telebot import AsyncTeleBot
 from parsing_info import check_course_status
-import json
-
-
-# Configuration
+from handlers import setup_handlers
+# Config
 scheduletime = 150  # seconds
 bot_token = '6884375984:AAECZ0NtylET5gjrl5e4NztjEoirsAQVDNo'
-bot_chatID = '779703230'
 
-# Initialize async Telegram bot
-bot = AsyncTeleBot(bot_token)
-
-@bot.message_handler(commands =['start'])
-async def start_command(message):
-    await bot.send_message(message.chat.id, "Hello, I've already added you to my system.\nI can help to get a free place at your classes.\n Write /help to get a list of commands.")
-    with sql.connect("users.db") as con:
-        cur = con.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-            chat_id TEXT PRIMARY KEY,
-            crns TEXT
-            )
-        """)
-        con.commit()
-        cur.execute(f"""
-        SELECT * FROM users WHERE chat_id ='{message.chat.id}' 
-        """)
-        if cur.fetchone() == None:
-            cur.execute(f"""
-            INSERT INTO users (chat_id, crns) VALUES ('{message.char.id}', '')
-            """)
-            con.commit()
+bot = setup_handlers(AsyncTeleBot(bot_token))
 
 
+async def send_notification(chat_id, crn, max_attempts=3):
+    for attempt in range(max_attempts):
+        try:
+            course_title, status = await check_course_status(crn)
+            if status == 1:
+                message = f"🚨 COURSE AVAILABLE! 🚨\n\n{course_title}\n\nGo register now!"
+                await bot.send_message(chat_id, message)
+                break
+            elif status == -1:
+                error_msg = "⚠️ Error checking course status."
+                await bot.send_message(chat_id, error_msg)
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                print(f"Failed after {max_attempts} attempts: {e}")
+            await asyncio.sleep(2)
 
+async def scheduled_task():
+    while True:
+        await send_notification('779703230', '10929')
+        await asyncio.sleep(scheduletime)
 
+async def main():
+    await asyncio.gather(
+        bot.polling(non_stop=True),
+        scheduled_task()
+    )
 
-
-async def send_notification():
-    course_title, status = await check_course_status()
-
-    if status == 1:
-        message = f"🚨 COURSE AVAILABLE! 🚨\n\n{course_title}\n\nGo register now!"
-        await bot.send_message(bot_chatID, message)
-    elif status == -1:
-        error_msg = "⚠️ Error checking course status. Please check the script."
-        await bot.send_message('779703230', error_msg)
-
-
-def run_async_job():
-    asyncio.run(send_notification())
-
-
-# Schedule the job
-schedule.every(scheduletime).seconds.do(run_async_job)
-
-# Initial run
-run_async_job()
-
-# Main loop
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+if __name__ == '__main__':
+    asyncio.run(main())

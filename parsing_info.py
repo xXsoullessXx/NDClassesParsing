@@ -2,7 +2,7 @@ from playwright.async_api import async_playwright
 import asyncio
 
 
-async def check_course_status():
+async def check_course_status(crn):
     url = 'https://bxeregprod.oit.nd.edu/StudentRegistration/ssb/term/termSelection?mode=search'
 
     try:
@@ -27,7 +27,7 @@ async def check_course_status():
             await page.wait_for_selector('#txt_keywordlike')
 
             # Fill course number
-            await page.fill('#txt_keywordlike', '10929')
+            await page.fill('#txt_keywordlike', crn)
 
             # Click Search
             await page.click('button:has-text("Search")')
