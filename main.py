@@ -1,35 +1,30 @@
 import asyncio
-import sqlite3 as sql
 from telebot.async_telebot import AsyncTeleBot
-from parsing_info import check_course_status
+import parsing_info
+import sql_requests
 from handlers import setup_handlers
 # Config
-scheduletime = 150  # seconds
+scheduletime = 150
 bot_token = '6884375984:AAECZ0NtylET5gjrl5e4NztjEoirsAQVDNo'
 
 bot = setup_handlers(AsyncTeleBot(bot_token))
 
 
-async def send_notification(chat_id, crn, max_attempts=3):
-    for attempt in range(max_attempts):
-        try:
-            course_title, status = await check_course_status(crn)
-            if status == 1:
-                message = f"🚨 COURSE AVAILABLE! 🚨\n\n{course_title}\n\nGo register now!"
-                await bot.send_message(chat_id, message)
-                break
-            elif status == -1:
-                error_msg = "⚠️ Error checking course status."
-                await bot.send_message(chat_id, error_msg)
-        except Exception as e:
-            if attempt == max_attempts - 1:
-                print(f"Failed after {max_attempts} attempts: {e}")
-            await asyncio.sleep(2)
+async def parsing_all_the_info():
+    chat_ids = await sql_requests.get_chat_ids('users.db')
+    for user_id_tuple in chat_ids:
+        user_id = user_id_tuple[0]
+        crns = await sql_requests.get_crns(user_id, 'users.db')
+        if crns:
+            for crn in crns:
+                await parsing_info.send_notification(bot, user_id, crn, 3)
+
 
 async def scheduled_task():
     while True:
-        await send_notification('779703230', '10929')
+        await parsing_all_the_info()
         await asyncio.sleep(scheduletime)
+
 
 async def main():
     await asyncio.gather(

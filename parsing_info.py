@@ -33,7 +33,7 @@ async def check_course_status(crn):
             await page.click('button:has-text("Search")')
 
             # Wait for results to load
-            await page.wait_for_selector('.odd')  # Use the actual class for result
+            await page.wait_for_selector('.odd', timeout = 10000)  # Use the actual class for result
 
             # Get content
             status = await page.inner_text('[data-content="Status"]')
@@ -52,4 +52,19 @@ async def check_course_status(crn):
         return None, -1  # Error status
 
 
+async def send_notification(bot, chat_id, crn, max_attempts=3):
+    for attempt in range(max_attempts):
+        try:
+            course_title, status = await check_course_status(crn)
+            if status == 1:
+                message = f"🚨 COURSE AVAILABLE! 🚨\n\n{course_title}\n\nGo register now!"
+                await bot.send_message(chat_id, message)
+                break
+            elif status == -1:
+                error_msg = "⚠️ Error checking course status."
+                await bot.send_message(chat_id, error_msg)
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                print(f"Failed after {max_attempts} attempts: {e}")
+            await asyncio.sleep(2)
 
